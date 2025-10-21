@@ -11,20 +11,20 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Install MSVC
-      uses: microsoft/setup-msbuild@v1
+      - name: Install MSVC
+        uses: microsoft/setup-msbuild@v1
 
-    - name: Configure CMake
-      run: cmake -B build -S .
+      - name: Configure CMake
+        run: cmake -B build -S .
 
-    - name: Build DLLs
-      run: cmake --build build --config Release
+      - name: Build DLLs
+        run: cmake --build build --config Release
 
-    - name: Upload DLL artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: veh_patch_smart_dlls
-        path: build/Release/*.dll
+      - name: Upload DLL artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: veh_patch_smart
+          path: build/Release/*.dll
