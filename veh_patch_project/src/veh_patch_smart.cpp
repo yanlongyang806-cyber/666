@@ -1,10 +1,9 @@
-\
 #include <windows.h>
 #include <fstream>
 #include <sstream>
 #include <string>
 
-// 固定日志路径（你之前选择了写到 Servers 目录）
+// 固定日志路径
 static const char* kLogPath = "D:\\\\SPP-LegionV2\\\\Servers\\\\veh_patch.log";
 
 // 主模块信息
@@ -27,7 +26,7 @@ static std::string HexU64(DWORD64 v) {
     return oss.str();
 }
 
-// 读取 PE SizeOfImage（无需额外库）
+// 读取 PE SizeOfImage
 static DWORD64 GetModuleSizeFromPE(DWORD64 base) {
     if (!base) return 0;
     auto dos = reinterpret_cast<PIMAGE_DOS_HEADER>(base);
@@ -42,31 +41,36 @@ static LONG CALLBACK SmartVehHandler(EXCEPTION_POINTERS* ep) {
     if (!ep || !ep->ExceptionRecord || !ep->ContextRecord) return EXCEPTION_CONTINUE_SEARCH;
 
     const auto code = ep->ExceptionRecord->ExceptionCode;
+    
+    // 捕获多种异常类型
     if (code != EXCEPTION_ACCESS_VIOLATION &&
-        code != EXCEPTION_ARRAY_BOUNDS_EXCEEDED &&
-        code != EXCEPTION_ILLEGAL_INSTRUCTION) {
+        code != EXCEPTION_ILLEGAL_INSTRUCTION &&
+        code != EXCEPTION_STACK_OVERFLOW) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
 
-    const DWORD64 ripBefore = ep->ContextRecord->Rip;
     const DWORD64 crashAddr = reinterpret_cast<DWORD64>(ep->ExceptionRecord->ExceptionAddress);
 
-    // 仅在 worldserver.exe 主模块范围内尝试“跳过”
-    if (gModuleBase && gModuleSize &&
-        crashAddr >= gModuleBase && crashAddr < (gModuleBase + gModuleSize)) {
+    // 处理特定的崩溃地址: 0x00000000088CB07A
+    if (crashAddr == 0x00000000088CB07A) {
+        const DWORD64 ripBefore = ep->ContextRecord->Rip;
 
-        // 保险起见，默认前进 2 字节（常见短指令大小）。
-        // 如果你的目标指令更长，可以在这里调到 3/5 等。
-        DWORD64 advance = 2;
-        ep->ContextRecord->Rip += advance;
+        // 仅在 worldserver.exe 主模块范围内尝试“跳过”
+        if (gModuleBase && gModuleSize &&
+            crashAddr >= gModuleBase && crashAddr < (gModuleBase + gModuleSize)) {
 
-        WriteLog(std::string("[VEH] 捕获异常(code=") +
-                 std::to_string(code) +
-                 ") @" + HexU64(crashAddr) +
-                 " RIP " + HexU64(ripBefore) + " -> " + HexU64(ep->ContextRecord->Rip) +
-                 "，已尝试跳过指令继续执行。");
+            // 保险起见，默认前进 2 字节（常见短指令大小）
+            DWORD64 advance = 2;  // 可根据实际崩溃情况调整
+            ep->ContextRecord->Rip += advance;
 
-        return EXCEPTION_CONTINUE_EXECUTION;
+            WriteLog(std::string("[VEH] 捕获异常(code=") +
+                     std::to_string(code) +
+                     ") @" + HexU64(crashAddr) +
+                     " RIP " + HexU64(ripBefore) + " -> " + HexU64(ep->ContextRecord->Rip) +
+                     "，已尝试跳过指令继续执行。");
+
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
     }
 
     // 非主模块/不满足条件，交由系统处理
